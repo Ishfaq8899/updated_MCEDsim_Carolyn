@@ -23,7 +23,7 @@ mced_biennial_no_crc <- build_crc_data_revised("MCED_biennial_no_CRC", CRC_SPIN_
 mced_triennial_no_crc <- build_crc_data_revised("MCED_triennial_no_CRC", CRC_SPIN_dir)
 
 
-# Build the 12 scenarios 
+# Build the 12 scenarios
 crc_list <- list(control = crc_control,
                  colonoscopy = crc_colon,
                  annual_fit = crc_fit,
@@ -64,7 +64,7 @@ for (scenario in all_scenarios){
   all_results[[scenario]] <- process_mced_crc_data(scenario_name = scenario,
                                                    mced_data_dir = mced_data_dir,
                                                    crc_data_path = crc_data_path
-  ) 
+  )
 }
 
 output_dir <- "/Users/ahmadish/Desktop/OHSU_Projects/Ishfaq_folder/MCED_Colorectal_Project/MCEDsim_Carolyn/data"
@@ -72,8 +72,8 @@ output_dir <- "/Users/ahmadish/Desktop/OHSU_Projects/Ishfaq_folder/MCED_Colorect
 for (scenario in all_scenarios) {
   joined_data <- all_results[[scenario]]$joined_data
   excess_cancers <- all_results[[scenario]]$excess_cancers
-  
-  save(joined_data, excess_cancers, 
+
+  save(joined_data, excess_cancers,
        file = file.path(output_dir, paste0(scenario, "_processed_data.RData")))
 }
 
