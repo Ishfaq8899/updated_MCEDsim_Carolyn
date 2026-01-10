@@ -57,5 +57,5 @@ out_age_bin <- combine_by_age_cat_sex(
             combined_additional_results = combined_addtl,
                  combined_first_results = combined_first,
                             the_age_cat = "(60,65]")
-                             
+
 }

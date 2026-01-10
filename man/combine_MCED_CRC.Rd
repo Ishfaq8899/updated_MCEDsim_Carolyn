@@ -5,36 +5,34 @@
 \title{Combine MCED Results with Colorectal Cancer Data}
 \usage{
 combine_MCED_CRC(
-  combined_first_results,
-  combined_additional_results,
+  merged_CRC_MCED_results,
   starting_age,
   ending_age,
-  CRC_data,
   surv_param_table
 )
 
 combine_MCED_CRC(
-  combined_first_results,
-  combined_additional_results,
+  merged_CRC_MCED_results,
   starting_age,
   ending_age,
-  CRC_data,
   surv_param_table
 )
 }
 \arguments{
-\item{combined_first_results}{Data frame of first cancer diagnoses output from
-function(sim_MCED_parallel_universe_before_CRC())}
-
-\item{combined_additional_results}{Data frame of additional (non-first) cancer diagnoses}
+\item{merged_CRC_MCED_results}{Data frame that combine the CRC with MCEDsim data for a particular scenario.}
 
 \item{starting_age}{Numeric starting age for cohort}
 
 \item{ending_age}{Numeric ending age for simulation}
 
+\item{surv_param_table}{Data frame of cancer-specific survival parameters}
+
+\item{combined_first_results}{Data frame of first cancer diagnoses output from
+function(sim_MCED_parallel_universe_before_CRC())}
+
 \item{CRC_data}{Data frame containing colorectal cancer simulation results}
 
-\item{surv_param_table}{Data frame of cancer-specific survival parameters}
+\item{combined_additional_results}{Data frame of additional (non-first) cancer diagnoses}
 }
 \value{
 A list with two elements: results(A data frame for all individuals after reassignment and
@@ -83,7 +81,7 @@ out <- combine_MCED_CRC(combined_first_results = combined_first_results,
                        CRC_data = CRC_data,
                        surv_param_table = param_table
 )
-out <- combine_MCED_CRC(combined_first_results = combined_first_results,
+out <- combine_MCED_CRC(merged_CRC_MCED_results = merged_CRC_MCED_results,
                        combined_additional_results = combined_additional_results,
                         starting_age = 45,
                        ending_age   = 500,
