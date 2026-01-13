@@ -284,11 +284,13 @@ sim_MCED_parallel_universe_before_CRC <- function(cancer_sites,
 combine_MCED_CRC<- function(merged_CRC_MCED_results,
                             starting_age,
                             ending_age,
-                            surv_param_table){
+                            surv_param_table,
+                            pairs_table = NULL) {
 
-  browser()
-  # Identify people who have clinical diagnosis of first cancer prior to other cause death
+  # Pull merged MCED+CRC cohort
   combined_first_results=merged_CRC_MCED_results$joined_data
+
+  # primary_cancer: Identify people who have clinical diagnosis of first cancer prior to other cause death
   primary_cancer <- combined_first_results %>% filter(clinical_diagnosis_time<=other_cause_death_time)
 
   #Identify people who do not have clinical diagnosis of first cancer prior to other cause death.
@@ -297,25 +299,28 @@ combine_MCED_CRC<- function(merged_CRC_MCED_results,
   no_primary_cancer <- combined_first_results %>% filter(clinical_diagnosis_time>other_cause_death_time)%>%
     mutate(age_OC_death_cat=cut(other_cause_death_time,breaks=seq(0,150,by=5)))
 
-####################
-# WE STOP HERE....
 
-  #If there are additional results (i.e. at least one row is not empty), then reassign
-  combined_additional_results <-combined_additional_results %>% filter(clinical_diagnosis_time <=other_cause_death_time)
+  # Build the "cancer pool" we want to assign to unaffected people:
+  #  additional cancers (MCED additional cancers)
+  #   excess cancers (MCED primaries displaced when CRC became primary)
+  combined_additional_results <- bind_rows(merged_CRC_MCED_results$combined_additional_results,
+                                           merged_CRC_MCED_results$excess_cancers)
+
+
+  # Keep only cancers that could be clinically diagnosed before OC death
+  # If there are any additional/excess cancers eligible for reassignment, proceed
+  combined_additional_results <- combined_additional_results %>% filter(clinical_diagnosis_time <= other_cause_death_time)
+
   at_least_one_additional_result=dim(combined_additional_results)[1]>0
   no_match_counter=0
 
+  # ensure pairs always exists for returning
+  pairs <- pairs_table
+
+  # If there are cancers to reassign, run matching & reassignment
   if(at_least_one_additional_result){
 
-    #Note: consider if we want to use cancer onset or clinical diagnosis for additional cancers for purpose of calculating over diagnosis.
-    #If we decide this is important, change clinical_diagnosis_time to cancer_onset_time in the subsequent code
-
-    #Filter additional cancers for those whose clinical diagnosis is prior to other cause death
-
-
-    # browser()
-
-    #Simulate cancer-specific deaths for additional cancers
+    # Simulate cancer-specific deaths for additional cancers
     addtl_cancer_deaths=mapply(
       FUN="sim_cancer_deaths_screen_no_screen",
       clinical_diagnosis_time  = combined_additional_results$clinical_diagnosis_time,
@@ -327,70 +332,110 @@ combine_MCED_CRC<- function(merged_CRC_MCED_results,
       MoreArgs = list(surv_param_table=surv_param_table),
       SIMPLIFY = F)
 
-
-    #Join cancer-specific deaths with cancer diagnoses for additional cancers
+    # Join cancer-specific deaths with cancer diagnoses for additional cancers
     combined_additional_results = data.frame(do.call(rbind,addtl_cancer_deaths))%>%
       inner_join(combined_additional_results, by=c("ID","cancer_site"))
 
 
-#=====================
-    # Combine the CRC data with the additional cancers for reassignment.  CRC diagnoses that occur after other cause death do not
-    #  need to be reassigned so these people are removed from combined_additional_results.
-    combined_additional_results <- bind_rows(CRC_data,combined_additional_results)%>%
-      mutate(age_OC_death_cat=cut(other_cause_death_time,breaks=seq(0,150,by=5)))%>%
-      filter(clinical_diagnosis_time <=other_cause_death_time)
-#=========
+    # Keep only additional/excess cancers that are clinically diagnosable before other-cause death (eligible for reassignment)
+    combined_additional_results <- combined_additional_results %>%
+      mutate(age_OC_death_cat = cut(other_cause_death_time, breaks = seq(0,150,by=5))) %>%
+      filter(clinical_diagnosis_time <= other_cause_death_time)
+
+    # counts before matching (for validation)
+    N_cancers_to_assign <- nrow(combined_additional_results)
+    N_primary_before    <- nrow(primary_cancer)
+    N_unaffected_before <- nrow(no_primary_cancer)
+
+    #prepare cancers to reassign and unaffected individuals tables
+
+    # cancers_to_reassign: all additional/excess cancers that need to be assigned to unaffected people
+    cancers_to_reassign <- combined_additional_results %>%
+      mutate(treat = 1L, row_id = paste0("T_", row_number()))
+
+    # unaffected_people: individuals with no primary cancer (available for matching)
+    unaffected_people <- no_primary_cancer %>%
+      mutate(treat = 0L, row_id = paste0("C_", row_number()))
+
+    # ================================
+    # Reassignment using MatchIt
+    # ================================
 
 
-    # Record counts for verification
-    # Counts of number of multiple cancers, primary cancers in lifetime, and no primary cancers in lifetime
-    N_multiple_cancers=nrow(combined_additional_results)
-    N_primary_cancers=nrow(primary_cancer)
-    N_no_primary_cancer=nrow(no_primary_cancer)
+    # if pairs_table is NULL, create pairs (do matching)
+    # else, use existing pairs_table (skip matching)
+    if (is.null(pairs_table)) {
 
-    # Set index as ID to identify specific individual without primary cancer (used in bookkeeping in next step)
-    no_primary_cancer <- no_primary_cancer %>% mutate(index=seq(1,nrow(no_primary_cancer)))
+      # no pairs provided- do matching
 
-    #  Reassignment Algorithm
-    # This loop goes through the combined_additional_results rows and attempts to match in an individual in
-    #   no_primary_cancer within the same OC death strata.
-    # Then it adds the combined_additional_results row to primary_cancer and removes the matching row from
-    #   no_primary cancer, since they are not eligible to matched again.
-    # Finally, it removes the row from combined_additional_results and updates the no_match_counter.
-#============
-# We will be replacing this while loop by MatchIt function using age at other cause death.
-#============
-    no_match_counter=0
-    while(nrow(combined_additional_results)>0){
-      # Attempt to match first row of additional cancers
-      test = match_individual(
-        i = 1,
-        combined_additional_results = combined_additional_results,
-        no_primary_cancer = no_primary_cancer
+
+      # Combine both groups for matching algorithm
+      combined_for_matching <- bind_rows(cancers_to_reassign, unaffected_people)
+
+      # Run matching: 1-to-1, without replacement
+      m.out <- matchit( treat ~ other_cause_death_time,
+                        data    = combined_for_matching,
+                        method  = "nearest",
+                        ratio   = 1,
+                        replace = FALSE,
+                        exact   = ~ sex
       )
-      # If match found
-      if(length(test)>1){
-        # Add this additional cancer to primary_cancer
-        primary_cancer=bind_rows(combined_additional_results[1,],primary_cancer)
-        no_primary_cancer=no_primary_cancer%>%filter(index!=test$index)
-      }else{
-        # No match found, increment counter
-        no_match_counter = no_match_counter+1
-      }
-      # Remove processed row
-      combined_additional_results=combined_additional_results[-1,]
+
+      # Extract matched data
+      matched_data <- match.data(m.out)
+      matched_cancers  <- matched_data %>% filter(treat == 1)
+      matched_unaffected  <- matched_data %>% filter(treat == 0)
+
+      #  Create pairs table: which cancer is paired with which unaffected person
+      #      pairs <- matched_cancers %>% rename(cancer_id = row_id) %>%
+      #      inner_join(matched_unaffected %>% rename(unaffected_id = row_id), by = "subclass") %>%
+      #      select(subclass, cancer_id, unaffected_id)
+
+
+      # pairs table with original IDs included
+      pairs <- matched_cancers %>% rename(cancer_id = row_id) %>% select(subclass, cancer_id, cancer_original_ID = ID) %>%
+        inner_join(matched_unaffected %>% rename(unaffected_id = row_id) %>% select(subclass, unaffected_id, unaffected_original_ID = ID),
+                   by = "subclass")
+
 
     }
+    if (nrow(pairs) > 0) {
 
-    # Verify counts
-    # Check to see if the added and subtracted rows match expectations based on previous loop.
-    N_multiple_cancers_2=nrow(combined_additional_results)
-    N_primary_cancers_2=nrow(primary_cancer)
-    N_no_primary_cancer_2=nrow(no_primary_cancer)
-  }#End of if statement (reassigning)
+      # Reassign cancers to matched unaffected individuals
+      reassigned_cancers <- cancers_to_reassign %>%inner_join(pairs, by = c("row_id" = "cancer_id")) %>%
+        left_join(unaffected_people %>% select(row_id, ID_new = ID, sex_new = sex, death_time_new = other_cause_death_time),
+                  by = c("unaffected_id" = "row_id")) %>%
+        mutate( ID = ID_new,sex = sex_new, other_cause_death_time = death_time_new,
+                age_OC_death_cat = cut(death_time_new, breaks = seq(0,150,by=5))) %>%
+        select(-treat, -row_id, -unaffected_id, -ID_new, -sex_new, -death_time_new)
 
+      # Add reassigned cancers to the primary cancer dataset
+      primary_cancer <- bind_rows(primary_cancer, reassigned_cancers)
+
+      # Remove matched individuals from the pool of unaffected people
+      unaffected_who_received_cancers <- unique(reassigned_cancers$ID)
+      no_primary_cancer <- no_primary_cancer %>% filter(!(ID %in% unaffected_who_received_cancers))
+
+      # Counters
+      N_matched <- nrow(reassigned_cancers)
+      no_match_counter <- nrow(cancers_to_reassign) - N_matched
+      N_unmatched <- no_match_counter
+
+      # Sanity check: after reassignment
+      N_primary_after    <- nrow(primary_cancer)
+      N_unaffected_after <- nrow(no_primary_cancer)
+    }
+
+  }
   # Final data with all cancers combined (first cancers and reassigned cancers)
   combined_results=bind_rows(primary_cancer,no_primary_cancer)
+
+  #rowser()
+
+  return(list( combined_results = combined_results, pairs = pairs))
+}
+
+
 
   #Process data with other cause death as a censoring event
 
@@ -400,56 +445,56 @@ combine_MCED_CRC<- function(merged_CRC_MCED_results,
   #Ascertain mode of diagnosis under screening scenario
   #Ascertain stage at diagnsosis under screening scenario
   #Ascertain if individual was overdiagnosed (screen detected but died due to other causes prior to clinical diagnosis)
-  combined_results=combined_results %>% mutate(clin_dx_age = pmin(other_cause_death_time,clinical_diagnosis_time,end_time,na.rm = T),
-                                               clin_dx_event = case_when(
-                                                 clin_dx_age == other_cause_death_time ~ "other_cause_death",
-                                                 clin_dx_age == end_time ~ "censor",
-                                                 clin_dx_age == clinical_diagnosis_time ~ "clin_cancer_diagnosis",
-                                                 .default = NA
-                                               ),
-                                               clin_dx_event_stage = case_when(clin_dx_event == "clin_cancer_diagnosis" & clinical_diagnosis_stage == "Early"~1,
-                                                                               clin_dx_event == "clin_cancer_diagnosis" & clinical_diagnosis_stage == "Late"~2,
-                                                                               .default = 3),
-                                               screen_dx_age = pmin(other_cause_death_time,screen_diagnosis_time,end_time,na.rm = T),
-                                               screen_dx_event = case_when(
-                                                 screen_dx_age == other_cause_death_time ~ "other_cause_death",
-                                                 screen_dx_age == end_time ~ "censor",
-                                                 screen_dx_age == screen_diagnosis_time ~ "screen_cancer_diagnosis",
-                                                 .default = NA
-                                               ),
-                                               screen_dx_event_stage = case_when(screen_dx_event == "screen_cancer_diagnosis" & screen_diagnosis_stage == "Early"~1,
-                                                                                 screen_dx_event == "screen_cancer_diagnosis" & screen_diagnosis_stage == "Late"~2,
-                                                                                 .default = 3),
-                                               death_age_no_screen=pmin(other_cause_death_time,cancer_death_time_no_screen,end_time,na.rm = T),
-                                               death_age_screen=pmin(other_cause_death_time,cancer_death_time_screen,end_time,na.rm = T),
-                                               death_event_no_screen=case_when(
-                                                 death_age_no_screen == other_cause_death_time ~ "other_cause_death",
-                                                 death_age_no_screen == end_time ~ "censor",
-                                                 death_age_no_screen == cancer_death_time_no_screen ~ "cancer_death",
-                                                 .default = NA
-                                               ),
-                                               death_event_screen=case_when(
-                                                 death_age_screen == other_cause_death_time ~ "other_cause_death",
-                                                 death_age_screen == end_time ~ "censor",
-                                                 death_age_screen == cancer_death_time_screen ~ "cancer_death",
-                                                 .default = NA
-                                               ),
-                                               diagnosis_age_screen_scenario=pmin(clin_dx_age,screen_dx_age,na.rm=T),
-                                               diagnosis_event_screen_scenario=ifelse(screen_dx_age<=clin_dx_age, screen_dx_event,
-                                                                                      clin_dx_event),
-                                               diagnosis_event_stage_screen_scenario=case_when(screen_dx_event == "screen_cancer_diagnosis" & screen_diagnosis_stage == "Early"~1,
-                                                                                               screen_dx_event == "screen_cancer_diagnosis" & screen_diagnosis_stage == "Late" ~2,
-                                                                                               (screen_dx_event!="screen_cancer_diagnosis" & clin_dx_event=="clin_cancer_diagnosis") & clinical_diagnosis_stage=="Early"~1,
-                                                                                               (screen_dx_event !="screen_cancer_diagnosis" & clin_dx_event=="clin_cancer_diagnosis") & clinical_diagnosis_stage=="Late"~2,
-                                                                                               .default = 3),
-                                               life_years_diff=death_age_screen-death_age_no_screen,
-                                               overdiagnosis=ifelse(screen_dx_event=="screen_cancer_diagnosis"&clin_dx_event=="other_cause_death",1,0)
-
-
-  )
-
-  return(list(results = combined_results, no_match_counter = no_match_counter))
-}
+#   combined_results=combined_results %>% mutate(clin_dx_age = pmin(other_cause_death_time,clinical_diagnosis_time,end_time,na.rm = T),
+#                                                clin_dx_event = case_when(
+#                                                  clin_dx_age == other_cause_death_time ~ "other_cause_death",
+#                                                  clin_dx_age == end_time ~ "censor",
+#                                                  clin_dx_age == clinical_diagnosis_time ~ "clin_cancer_diagnosis",
+#                                                  .default = NA
+#                                                ),
+#                                                clin_dx_event_stage = case_when(clin_dx_event == "clin_cancer_diagnosis" & clinical_diagnosis_stage == "Early"~1,
+#                                                                                clin_dx_event == "clin_cancer_diagnosis" & clinical_diagnosis_stage == "Late"~2,
+#                                                                                .default = 3),
+#                                                screen_dx_age = pmin(other_cause_death_time,screen_diagnosis_time,end_time,na.rm = T),
+#                                                screen_dx_event = case_when(
+#                                                  screen_dx_age == other_cause_death_time ~ "other_cause_death",
+#                                                  screen_dx_age == end_time ~ "censor",
+#                                                  screen_dx_age == screen_diagnosis_time ~ "screen_cancer_diagnosis",
+#                                                  .default = NA
+#                                                ),
+#                                                screen_dx_event_stage = case_when(screen_dx_event == "screen_cancer_diagnosis" & screen_diagnosis_stage == "Early"~1,
+#                                                                                  screen_dx_event == "screen_cancer_diagnosis" & screen_diagnosis_stage == "Late"~2,
+#                                                                                  .default = 3),
+#                                                death_age_no_screen=pmin(other_cause_death_time,cancer_death_time_no_screen,end_time,na.rm = T),
+#                                                death_age_screen=pmin(other_cause_death_time,cancer_death_time_screen,end_time,na.rm = T),
+#                                                death_event_no_screen=case_when(
+#                                                  death_age_no_screen == other_cause_death_time ~ "other_cause_death",
+#                                                  death_age_no_screen == end_time ~ "censor",
+#                                                  death_age_no_screen == cancer_death_time_no_screen ~ "cancer_death",
+#                                                  .default = NA
+#                                                ),
+#                                                death_event_screen=case_when(
+#                                                  death_age_screen == other_cause_death_time ~ "other_cause_death",
+#                                                  death_age_screen == end_time ~ "censor",
+#                                                  death_age_screen == cancer_death_time_screen ~ "cancer_death",
+#                                                  .default = NA
+#                                                ),
+#                                                diagnosis_age_screen_scenario=pmin(clin_dx_age,screen_dx_age,na.rm=T),
+#                                                diagnosis_event_screen_scenario=ifelse(screen_dx_age<=clin_dx_age, screen_dx_event,
+#                                                                                       clin_dx_event),
+#                                                diagnosis_event_stage_screen_scenario=case_when(screen_dx_event == "screen_cancer_diagnosis" & screen_diagnosis_stage == "Early"~1,
+#                                                                                                screen_dx_event == "screen_cancer_diagnosis" & screen_diagnosis_stage == "Late" ~2,
+#                                                                                                (screen_dx_event!="screen_cancer_diagnosis" & clin_dx_event=="clin_cancer_diagnosis") & clinical_diagnosis_stage=="Early"~1,
+#                                                                                                (screen_dx_event !="screen_cancer_diagnosis" & clin_dx_event=="clin_cancer_diagnosis") & clinical_diagnosis_stage=="Late"~2,
+#                                                                                                .default = 3),
+#                                                life_years_diff=death_age_screen-death_age_no_screen,
+#                                                overdiagnosis=ifelse(screen_dx_event=="screen_cancer_diagnosis"&clin_dx_event=="other_cause_death",1,0)
+#
+#
+#   )
+#
+#   return(list(results = combined_results, no_match_counter = no_match_counter))
+# }
 
 #########################################
 #' Combine MCED and CRC data for specific age category and sex

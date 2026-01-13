@@ -48,3 +48,11 @@ po/*~
 # RStudio Connect folder
 rsconnect/
 .Rproj.user
+
+R/try_updated_CRC_combine.R
+
+R/ishfaq_updated_CRC_combine.R
+
+R/archived_CRC_combine.R
+
+.DS_Store
