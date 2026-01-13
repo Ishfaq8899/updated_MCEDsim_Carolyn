@@ -1,6 +1,6 @@
 ########################################################################################
 #Author: Jane Lange
-#This function simulates from a time-homogeneous CTMC 
+#This function simulates from a time-homogeneous CTMC
 #INPUTS: rate.matrix=rate matrix, start.state=starting state for CTMC, end.time=time
 #         to stop data simulations; start.time= time to start data simulations
 #OUTPUTS: a list with two objects: "times"=transition times and "states"=transition states
@@ -201,18 +201,18 @@ get.obs.data.individual <- function(ID, rate.matrix, emission.matrix,
   clin_dx_early_state <- n_states - 1
   screen_early_state <- 2
   screen_late_state <- 3
-  
+
   ################
   pre_clin_early_state <- n_states - 3
   pre_clin_late_state <- n_states -2
 #####################
-  
+
   #set random seed based on ID
- # set.seed(ID)
+  set.seed(ID)
   # Simulate CTMC trajectory for individual
-  trajectory <- sim.ctmc(rate.matrix = rate.matrix, start.state = start.state, 
+  trajectory <- sim.ctmc(rate.matrix = rate.matrix, start.state = start.state,
                          end.time = end.time, start.time = start.time,absorbing.states=c(n_states-1,n_states))
-  
+
   onset_time=NA
   late_onset_time=NA
 
@@ -224,7 +224,7 @@ get.obs.data.individual <- function(ID, rate.matrix, emission.matrix,
   if(pre_clin_late_state%in%trajectory$states){
     late_onset_time=min(trajectory$times[trajectory$states==pre_clin_late_state])
   }
-  
+
   # Discretize states at observation times
   discrete.states <- discrete.ctmc(ctmc.times = trajectory$times,
                                    ctmc.states = trajectory$states,
@@ -249,8 +249,8 @@ get.obs.data.individual <- function(ID, rate.matrix, emission.matrix,
     clinical_diagnosis_index <- which(trajectory$states %in% c(clin_dx_early_state, clin_dx_late_state) == T)
     clinical_diagnosis_time <- trajectory$times[clinical_diagnosis_index]
     clinical_diagnosis_stage <- trajectory$states[clinical_diagnosis_index]
-    
-    clinical_diagnosis_stage <- ifelse(clinical_diagnosis_stage == clin_dx_early_state, "Early", "Late")  
+
+    clinical_diagnosis_stage <- ifelse(clinical_diagnosis_stage == clin_dx_early_state, "Early", "Late")
   }
 
   #Get screen diagnosis time
@@ -259,18 +259,18 @@ get.obs.data.individual <- function(ID, rate.matrix, emission.matrix,
       screen_diagnosis_index <- min(which(observed.data$obs.data %in% c(screen_early_state, screen_late_state) == T))
     screen_diagnosis_time <- observed.data$obs.times[screen_diagnosis_index]
     screen_diagnosis_stage <- observed.data$obs.data[screen_diagnosis_index]
-    
-   screen_diagnosis_stage <- ifelse(screen_diagnosis_stage == screen_early_state, "Early", "Late")  
+
+   screen_diagnosis_stage <- ifelse(screen_diagnosis_stage == screen_early_state, "Early", "Late")
   }
 
   #Get cumulative number screens without cancer present
   total_no_canc_screens=sum(discrete.states$states<pre_clin_early_state)
- 
-  
 
-  
-   
-  return(data.frame(ID, screen_diagnosis_time, screen_diagnosis_stage, 
+
+
+
+
+  return(data.frame(ID, screen_diagnosis_time, screen_diagnosis_stage,
                     clinical_diagnosis_time, clinical_diagnosis_stage,onset_time,late_onset_time,total_no_canc_screens))
 }
 
@@ -296,36 +296,36 @@ get.obs.data.individual <- function(ID, rate.matrix, emission.matrix,
 #' @export
 get.obs.data.individual.control <- function(ID, rate.matrix, end.time = 30,
                                             start.time = 0, start.state = 1) {
-  
+
   n_states <- dim(rate.matrix)[1]
   clin_dx_late_state <- n_states
   clin_dx_early_state <- n_states - 1
   screen_early_state <- 2
   screen_late_state <- 3
-  
+
   # Simulate CTMC trajectory for individual
   trajectory <- sim.ctmc(rate.matrix = rate.matrix, start.state = start.state,
                          end.time = end.time, start.time = start.time)
-  
-   
+
+
   # Clinical diagnosis time and stage
   clinical_diagnosis_time <- NA
   clinical_diagnosis_stage <- NA
-  
+
   # Screen diagnosis time and stage
   screen_diagnosis_time <- NA
   screen_diagnosis_stage <- NA
-  
+
   if (clin_dx_early_state %in% c(trajectory$states) || clin_dx_late_state %in% c(trajectory$states)) {
-    
+
     clinical_diagnosis_index <- which(trajectory$states %in% c(clin_dx_early_state, clin_dx_late_state) == T)
     clinical_diagnosis_time <- trajectory$times[clinical_diagnosis_index]
     clinical_diagnosis_stage <- trajectory$states[clinical_diagnosis_index]
-    
-    clinical_diagnosis_stage <- ifelse(clinical_diagnosis_stage == clin_dx_early_state, "early", "late")  
+
+    clinical_diagnosis_stage <- ifelse(clinical_diagnosis_stage == clin_dx_early_state, "early", "late")
   }
- 
-  return(data.frame(ID, screen_diagnosis_time, screen_diagnosis_stage, 
+
+  return(data.frame(ID, screen_diagnosis_time, screen_diagnosis_stage,
                     clinical_diagnosis_time, clinical_diagnosis_stage))
 }
 
@@ -363,7 +363,7 @@ get.obs.data.many<-function(num.individuals,rate.matrix, emission.matrix, obs.ti
   outlist=lapply(seq(1:num.individuals),FUN="gets.obs.data.individual", rate.matrix=rate.matrix,
                  emission.matrix=emission.matrix, obs.times = obs.times, end.time = end.time, start.time = start.time,
                  start.state = start.state)
-  
+
   out=do.call("rbind",outlist)
 }
 
