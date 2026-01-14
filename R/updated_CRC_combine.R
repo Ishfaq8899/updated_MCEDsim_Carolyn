@@ -432,9 +432,10 @@ combine_MCED_CRC<- function(merged_CRC_MCED_results,
 
   #rowser()
 
-  return(list( combined_results = combined_results, pairs = pairs))
-}
+#  return(list( combined_results = combined_results, pairs = pairs))
+#}
 
+  end_time <- ending_age
 
 
   #Process data with other cause death as a censoring event
@@ -445,56 +446,56 @@ combine_MCED_CRC<- function(merged_CRC_MCED_results,
   #Ascertain mode of diagnosis under screening scenario
   #Ascertain stage at diagnsosis under screening scenario
   #Ascertain if individual was overdiagnosed (screen detected but died due to other causes prior to clinical diagnosis)
-#   combined_results=combined_results %>% mutate(clin_dx_age = pmin(other_cause_death_time,clinical_diagnosis_time,end_time,na.rm = T),
-#                                                clin_dx_event = case_when(
-#                                                  clin_dx_age == other_cause_death_time ~ "other_cause_death",
-#                                                  clin_dx_age == end_time ~ "censor",
-#                                                  clin_dx_age == clinical_diagnosis_time ~ "clin_cancer_diagnosis",
-#                                                  .default = NA
-#                                                ),
-#                                                clin_dx_event_stage = case_when(clin_dx_event == "clin_cancer_diagnosis" & clinical_diagnosis_stage == "Early"~1,
-#                                                                                clin_dx_event == "clin_cancer_diagnosis" & clinical_diagnosis_stage == "Late"~2,
-#                                                                                .default = 3),
-#                                                screen_dx_age = pmin(other_cause_death_time,screen_diagnosis_time,end_time,na.rm = T),
-#                                                screen_dx_event = case_when(
-#                                                  screen_dx_age == other_cause_death_time ~ "other_cause_death",
-#                                                  screen_dx_age == end_time ~ "censor",
-#                                                  screen_dx_age == screen_diagnosis_time ~ "screen_cancer_diagnosis",
-#                                                  .default = NA
-#                                                ),
-#                                                screen_dx_event_stage = case_when(screen_dx_event == "screen_cancer_diagnosis" & screen_diagnosis_stage == "Early"~1,
-#                                                                                  screen_dx_event == "screen_cancer_diagnosis" & screen_diagnosis_stage == "Late"~2,
-#                                                                                  .default = 3),
-#                                                death_age_no_screen=pmin(other_cause_death_time,cancer_death_time_no_screen,end_time,na.rm = T),
-#                                                death_age_screen=pmin(other_cause_death_time,cancer_death_time_screen,end_time,na.rm = T),
-#                                                death_event_no_screen=case_when(
-#                                                  death_age_no_screen == other_cause_death_time ~ "other_cause_death",
-#                                                  death_age_no_screen == end_time ~ "censor",
-#                                                  death_age_no_screen == cancer_death_time_no_screen ~ "cancer_death",
-#                                                  .default = NA
-#                                                ),
-#                                                death_event_screen=case_when(
-#                                                  death_age_screen == other_cause_death_time ~ "other_cause_death",
-#                                                  death_age_screen == end_time ~ "censor",
-#                                                  death_age_screen == cancer_death_time_screen ~ "cancer_death",
-#                                                  .default = NA
-#                                                ),
-#                                                diagnosis_age_screen_scenario=pmin(clin_dx_age,screen_dx_age,na.rm=T),
-#                                                diagnosis_event_screen_scenario=ifelse(screen_dx_age<=clin_dx_age, screen_dx_event,
-#                                                                                       clin_dx_event),
-#                                                diagnosis_event_stage_screen_scenario=case_when(screen_dx_event == "screen_cancer_diagnosis" & screen_diagnosis_stage == "Early"~1,
-#                                                                                                screen_dx_event == "screen_cancer_diagnosis" & screen_diagnosis_stage == "Late" ~2,
-#                                                                                                (screen_dx_event!="screen_cancer_diagnosis" & clin_dx_event=="clin_cancer_diagnosis") & clinical_diagnosis_stage=="Early"~1,
-#                                                                                                (screen_dx_event !="screen_cancer_diagnosis" & clin_dx_event=="clin_cancer_diagnosis") & clinical_diagnosis_stage=="Late"~2,
-#                                                                                                .default = 3),
-#                                                life_years_diff=death_age_screen-death_age_no_screen,
-#                                                overdiagnosis=ifelse(screen_dx_event=="screen_cancer_diagnosis"&clin_dx_event=="other_cause_death",1,0)
-#
-#
-#   )
-#
-#   return(list(results = combined_results, no_match_counter = no_match_counter))
-# }
+  combined_results=combined_results %>% mutate(clin_dx_age = pmin(other_cause_death_time,clinical_diagnosis_time,end_time,na.rm = T),
+                                               clin_dx_event = case_when(
+                                                 clin_dx_age == other_cause_death_time ~ "other_cause_death",
+                                                 clin_dx_age == end_time ~ "censor",
+                                                 clin_dx_age == clinical_diagnosis_time ~ "clin_cancer_diagnosis",
+                                                 .default = NA
+                                               ),
+                                               clin_dx_event_stage = case_when(clin_dx_event == "clin_cancer_diagnosis" & clinical_diagnosis_stage == "Early"~1,
+                                                                               clin_dx_event == "clin_cancer_diagnosis" & clinical_diagnosis_stage == "Late"~2,
+                                                                               .default = 3),
+                                               screen_dx_age = pmin(other_cause_death_time,screen_diagnosis_time,end_time,na.rm = T),
+                                               screen_dx_event = case_when(
+                                                 screen_dx_age == other_cause_death_time ~ "other_cause_death",
+                                                 screen_dx_age == end_time ~ "censor",
+                                                 screen_dx_age == screen_diagnosis_time ~ "screen_cancer_diagnosis",
+                                                 .default = NA
+                                               ),
+                                               screen_dx_event_stage = case_when(screen_dx_event == "screen_cancer_diagnosis" & screen_diagnosis_stage == "Early"~1,
+                                                                                 screen_dx_event == "screen_cancer_diagnosis" & screen_diagnosis_stage == "Late"~2,
+                                                                                 .default = 3),
+                                               death_age_no_screen=pmin(other_cause_death_time,cancer_death_time_no_screen,end_time,na.rm = T),
+                                               death_age_screen=pmin(other_cause_death_time,cancer_death_time_screen,end_time,na.rm = T),
+                                               death_event_no_screen=case_when(
+                                                 death_age_no_screen == other_cause_death_time ~ "other_cause_death",
+                                                 death_age_no_screen == end_time ~ "censor",
+                                                 death_age_no_screen == cancer_death_time_no_screen ~ "cancer_death",
+                                                 .default = NA
+                                               ),
+                                               death_event_screen=case_when(
+                                                 death_age_screen == other_cause_death_time ~ "other_cause_death",
+                                                 death_age_screen == end_time ~ "censor",
+                                                 death_age_screen == cancer_death_time_screen ~ "cancer_death",
+                                                 .default = NA
+                                               ),
+                                               diagnosis_age_screen_scenario=pmin(clin_dx_age,screen_dx_age,na.rm=T),
+                                               diagnosis_event_screen_scenario=ifelse(screen_dx_age<=clin_dx_age, screen_dx_event,
+                                                                                      clin_dx_event),
+                                               diagnosis_event_stage_screen_scenario=case_when(screen_dx_event == "screen_cancer_diagnosis" & screen_diagnosis_stage == "Early"~1,
+                                                                                               screen_dx_event == "screen_cancer_diagnosis" & screen_diagnosis_stage == "Late" ~2,
+                                                                                               (screen_dx_event!="screen_cancer_diagnosis" & clin_dx_event=="clin_cancer_diagnosis") & clinical_diagnosis_stage=="Early"~1,
+                                                                                               (screen_dx_event !="screen_cancer_diagnosis" & clin_dx_event=="clin_cancer_diagnosis") & clinical_diagnosis_stage=="Late"~2,
+                                                                                               .default = 3),
+                                               life_years_diff=death_age_screen-death_age_no_screen,
+                                               overdiagnosis=ifelse(screen_dx_event=="screen_cancer_diagnosis"&clin_dx_event=="other_cause_death",1,0)
+
+
+  )
+
+  return(list(combined_results = combined_results, pairs = pairs,no_match_counter = no_match_counter))
+}
 
 #########################################
 #' Combine MCED and CRC data for specific age category and sex
